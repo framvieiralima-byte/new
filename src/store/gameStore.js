@@ -30,4 +30,41 @@ export const useGameStore = create((set) => ({
       next[index] = { ...pos };
       return { petPositions: next };
     }),
+
+  /**
+   * Hatch an egg: roll rarity from the egg's table and add a new pet to equippedPets.
+   * Returns the pet id that was added (e.g. 'common', 'rare', 'epic', 'legendary').
+   */
+  hatch: (eggType) => {
+    const tables = {
+      common: [
+        { chance: 0.8, pet: 'common' },
+        { chance: 0.2, pet: 'rare' },
+      ],
+      rare: [
+        { chance: 0.7, pet: 'rare' },
+        { chance: 0.3, pet: 'epic' },
+      ],
+      legendary: [
+        { chance: 0.1, pet: 'epic' },
+        { chance: 0.9, pet: 'legendary' },
+      ],
+    };
+    const table = tables[eggType] || tables.common;
+    const roll = Math.random();
+    let acc = 0;
+    let chosen = table[0].pet;
+    for (const row of table) {
+      acc += row.chance;
+      if (roll < acc) {
+        chosen = row.pet;
+        break;
+      }
+    }
+    set((state) => ({
+      equippedPets: [...(state.equippedPets || []), chosen],
+      petPositions: [...(state.petPositions || []), { x: 0, z: 0 }],
+    }));
+    return chosen;
+  },
 }));

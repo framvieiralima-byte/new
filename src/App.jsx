@@ -3,14 +3,15 @@ import { Canvas } from '@react-three/fiber';
 import { GameProvider, useGame } from './context/GameContext';
 import World from './components/World';
 import ProfileLoader from './components/ProfileLoader';
+import PetShop from './components/PetShop';
 import './App.css';
 
 function CoinsOverlay() {
-  const { coinCountTotal, collectedCoinIds, unlockedPets, petStats } = useGame();
+  const { coinCountTotal, playerCoins, collectedCoinIds, unlockedPets, petStats } = useGame();
   const stage = petStats.level < 4 ? 'Baby' : petStats.level < 10 ? 'Teen' : 'Mega';
   return (
     <div className="coins-overlay">
-      <div>Coins: <strong>{coinCountTotal}</strong> (this round: {collectedCoinIds.length} / 10)</div>
+      <div>Coins: <strong>{playerCoins}</strong> / {coinCountTotal} total (this round: {collectedCoinIds.length} / 10)</div>
       <div className="pet-stats">Pet: Lv.{petStats.level} ({stage}) — EXP {petStats.exp}/100</div>
       {unlockedPets.length > 0 && (
         <div className="unlocked-pets">Pets: {unlockedPets.join(', ')}</div>
@@ -76,6 +77,7 @@ function App() {
           <IdentityForm />
           <CoinsOverlay />
         </div>
+        <PetShop />
       </div>
     </GameProvider>
   );

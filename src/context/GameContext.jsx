@@ -35,8 +35,15 @@ export function GameProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [identity, setIdentityState] = useState(loadIdentity);
   const [petStats, setPetStats] = useState({ level: 1, exp: 0 });
+  const [coinsSpent, setCoinsSpent] = useState(0);
   const coinsSyncedRef = useRef(0);
   const expAwardedForCoinsRef = useRef(0);
+
+  const playerCoins = (profile?.coin_count ?? 0) + collectedCoinIds.length - coinsSpent;
+
+  const spendCoins = useCallback((amount) => {
+    setCoinsSpent((prev) => prev + amount);
+  }, []);
 
   const setIdentity = useCallback((type, value) => {
     const next = value ? { type, value: value.trim() } : null;
@@ -100,6 +107,8 @@ export function GameProvider({ children }) {
     setIdentity,
     // Total coins: persisted + collected this session
     coinCountTotal: (profile?.coin_count ?? 0) + collectedCoinIds.length,
+    playerCoins,
+    spendCoins,
     unlockedPets: profile?.unlocked_pets ?? [],
     petStats,
     addPetExp,
