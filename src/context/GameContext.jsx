@@ -28,6 +28,7 @@ const EXP_PER_COIN = 20;
 
 export function GameProvider({ children }) {
   const [playerPosition, setPlayerPosition] = useState({ x: 0, z: 0 });
+  const [playerFacing, setPlayerFacing] = useState(0);
   const [petPosition, setPetPosition] = useState({ x: 0.6, z: 0.6 });
   const [isPlayerMoving, setIsPlayerMoving] = useState(false);
   const [collectedCoinIds, setCollectedCoinIds] = useState([]);
@@ -85,6 +86,8 @@ export function GameProvider({ children }) {
   const value = {
     playerPosition,
     setPlayerPosition,
+    playerFacing,
+    setPlayerFacing,
     petPosition,
     setPetPosition,
     isPlayerMoving,

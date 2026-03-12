@@ -14,7 +14,7 @@ export default function Player() {
   const groupRef = useRef(null);
   const targetRotationRef = useRef(0);
   const keysRef = useRef({ w: false, a: false, s: false, d: false });
-  const { setPlayerPosition, setIsPlayerMoving } = useGame();
+  const { setPlayerPosition, setPlayerFacing, setIsPlayerMoving } = useGame();
 
   useEffect(() => {
     const keys = keysRef.current;
@@ -77,6 +77,7 @@ export default function Player() {
     group.position.y = FLOOR_Y;
 
     setPlayerPosition({ x: group.position.x, z: group.position.z });
+    setPlayerFacing(group.rotation.y);
   });
 
   return (

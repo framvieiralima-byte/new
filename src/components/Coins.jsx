@@ -1,5 +1,6 @@
 import { useFrame } from '@react-three/fiber';
 import { useGame } from '../context/GameContext';
+import { useGameStore } from '../store/gameStore';
 
 const COIN_POSITIONS = [
   [-8, -6],
@@ -18,19 +19,23 @@ const COLLECT_RADIUS = 0.8;
 const COIN_Y = 0.35;
 
 /**
- * 10 yellow sphere coins. When the Pet touches one, it disappears and the Coins counter increases.
+ * 10 yellow sphere coins. When any equipped pet touches one, it disappears and the counter updates.
  */
 export default function Coins() {
-  const { petPosition, collectedCoinIds, collectCoin } = useGame();
+  const { collectedCoinIds, collectCoin } = useGame();
+  const petPositions = useGameStore((s) => s.petPositions);
 
   useFrame(() => {
+    const positions = petPositions?.length ? petPositions : [{ x: 0, z: 0 }];
     COIN_POSITIONS.forEach(([x, z], id) => {
       if (collectedCoinIds.includes(id)) return;
-      const dx = petPosition.x - x;
-      const dz = petPosition.z - z;
-      const dist = Math.sqrt(dx * dx + dz * dz);
-      if (dist < COLLECT_RADIUS) {
-        collectCoin(id);
+      for (const pos of positions) {
+        const dx = pos.x - x;
+        const dz = pos.z - z;
+        if (Math.sqrt(dx * dx + dz * dz) < COLLECT_RADIUS) {
+          collectCoin(id);
+          return;
+        }
       }
     });
   });

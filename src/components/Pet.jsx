@@ -2,14 +2,15 @@ import { useRef, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { RoundedBox, MeshWobbleMaterial } from '@react-three/drei';
 import { useGame } from '../context/GameContext';
+import { useGameStore, FORMATION_OFFSETS } from '../store/gameStore';
 
-const FOLLOW_SPEED = 3;
+const LERP_FACTOR = 5;
 const PET_BASE_HEIGHT = 0.4;
-const BOUNCE_AMPLITUDE = 0.06;
-const BOUNCE_SPEED = 6;
+const BOBBING_AMPLITUDE = 0.06;
+const BOBBING_SPEED = 4;
 const ORBIT_RADIUS = 1.8;
 const ORBIT_SPEED = 1.2;
-const ORBIT_MOVE_SPEED = 4;
+const ORBIT_MOVE_LERP = 4;
 
 const STAGE_SCALE = {
   Baby: 0.5,
@@ -21,23 +22,39 @@ const LEVEL_UP_POP_DURATION = 0.35;
 const LEVEL_UP_POP_SCALE = 1.5;
 
 /**
- * Pet that follows the player. Evolution: Baby (1–3) → Teen (4–9) → Mega (10+).
- * Gains 20 EXP per coin; every 100 EXP = level up. Level-up pop effect.
+ * Compute formation target in world space from player position and facing.
+ * offset: { x, z } in player-local space (+x = right, +z = forward).
  */
-export default function Pet() {
+function formationTarget(playerPosition, playerFacing, offset) {
+  const cos = Math.cos(playerFacing);
+  const sin = Math.sin(playerFacing);
+  const worldX = playerPosition.x + offset.x * cos - offset.z * sin;
+  const worldZ = playerPosition.z + offset.x * sin + offset.z * cos;
+  return { x: worldX, z: worldZ };
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * Math.min(1, t);
+}
+
+/**
+ * Single pet that follows the player with formation offset, lerp movement, and bobbing.
+ * Evolution: Baby (1–3) → Teen (4–9) → Mega (10+).
+ */
+export default function Pet({ index = 0 }) {
   const groupRef = useRef(null);
-  const timeRef = useRef(0);
   const orbitAngleRef = useRef(0);
   const prevLevelRef = useRef(1);
   const levelUpStartRef = useRef(null);
 
-  const { playerPosition, isPlayerMoving, setPetPosition, petStats } = useGame();
+  const { playerPosition, playerFacing, isPlayerMoving, petStats } = useGame();
+  const setPetPosition = useGameStore((s) => s.setPetPosition);
 
   const evolutionStage =
     petStats.level < 4 ? 'Baby' : petStats.level < 10 ? 'Teen' : 'Mega';
   const baseScale = STAGE_SCALE[evolutionStage];
+  const offset = FORMATION_OFFSETS[index] ?? { x: 0, z: 0 };
 
-  // Detect level up and start pop animation
   useEffect(() => {
     if (petStats.level > prevLevelRef.current) {
       levelUpStartRef.current = performance.now() / 1000;
@@ -45,65 +62,68 @@ export default function Pet() {
     }
   }, [petStats.level]);
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     const group = groupRef.current;
     if (!group) return;
 
-    timeRef.current += delta;
+    const elapsed = state.clock.elapsedTime;
 
-    // Level-up pop: briefly scale to 1.5x then lerp back
+    // Level-up pop
     let scaleMult = 1;
     if (levelUpStartRef.current != null) {
-      const elapsed = performance.now() / 1000 - levelUpStartRef.current;
-      if (elapsed < LEVEL_UP_POP_DURATION) {
-        const t = elapsed / LEVEL_UP_POP_DURATION;
+      const levelElapsed = performance.now() / 1000 - levelUpStartRef.current;
+      if (levelElapsed < LEVEL_UP_POP_DURATION) {
+        const t = levelElapsed / LEVEL_UP_POP_DURATION;
         scaleMult = 1 + (LEVEL_UP_POP_SCALE - 1) * (1 - t);
       } else {
         levelUpStartRef.current = null;
       }
     }
-    const finalScale = baseScale * scaleMult;
-    group.scale.setScalar(finalScale);
+    group.scale.setScalar(baseScale * scaleMult);
 
-    // Idle bounce (always on)
-    const bounceY = Math.sin(timeRef.current * BOUNCE_SPEED) * BOUNCE_AMPLITUDE;
-    group.position.y = PET_BASE_HEIGHT + bounceY;
+    // Bobbing: phase offset per pet so they don't all bob in sync
+    const bob = Math.sin(elapsed * BOBBING_SPEED + index * 1.5) * BOBBING_AMPLITUDE;
+    group.position.y = PET_BASE_HEIGHT + bob;
 
     let targetX, targetZ;
-
     if (isPlayerMoving) {
-      targetX = playerPosition.x;
-      targetZ = playerPosition.z;
+      const t = formationTarget(playerPosition, playerFacing, offset);
+      targetX = t.x;
+      targetZ = t.z;
       orbitAngleRef.current = Math.atan2(
         group.position.z - playerPosition.z,
         group.position.x - playerPosition.x
       );
     } else {
       orbitAngleRef.current += delta * ORBIT_SPEED;
-      targetX = playerPosition.x + Math.cos(orbitAngleRef.current) * ORBIT_RADIUS;
-      targetZ = playerPosition.z + Math.sin(orbitAngleRef.current) * ORBIT_RADIUS;
+      const t = formationTarget(playerPosition, playerFacing, offset);
+      const orbitX = playerPosition.x + Math.cos(orbitAngleRef.current) * ORBIT_RADIUS;
+      const orbitZ = playerPosition.z + Math.sin(orbitAngleRef.current) * ORBIT_RADIUS;
+      targetX = lerp(t.x, orbitX, 0.5);
+      targetZ = lerp(t.z, orbitZ, 0.5);
     }
+
+    const speed = isPlayerMoving ? LERP_FACTOR : ORBIT_MOVE_LERP;
+    group.position.x = lerp(group.position.x, targetX, speed * delta);
+    group.position.z = lerp(group.position.z, targetZ, speed * delta);
 
     const dx = targetX - group.position.x;
     const dz = targetZ - group.position.z;
-    const speed = isPlayerMoving ? FOLLOW_SPEED : ORBIT_MOVE_SPEED;
-    group.position.x += dx * Math.min(1, speed * delta);
-    group.position.z += dz * Math.min(1, speed * delta);
-
     if (dx !== 0 || dz !== 0) {
       group.rotation.y = Math.atan2(-dx, -dz);
     }
 
-    setPetPosition({ x: group.position.x, z: group.position.z });
+    setPetPosition(index, { x: group.position.x, z: group.position.z });
   });
 
   const isMega = evolutionStage === 'Mega';
   const isTeen = evolutionStage === 'Teen';
+  const initialPos = formationTarget(playerPosition, playerFacing, offset);
 
   return (
     <group
       ref={groupRef}
-      position={[playerPosition.x, PET_BASE_HEIGHT, playerPosition.z]}
+      position={[initialPos.x, PET_BASE_HEIGHT, initialPos.z]}
     >
       <RoundedBox
         args={[0.5, 0.5, 0.5]}
@@ -135,7 +155,6 @@ export default function Pet() {
   );
 }
 
-/** Two small horn triangles on top for Teen stage */
 function Horns() {
   return (
     <group position={[0, 0.4, 0]}>
