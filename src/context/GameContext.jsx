@@ -23,6 +23,9 @@ function saveIdentity(identity) {
 
 const GameContext = createContext(null);
 
+const EXP_PER_LEVEL = 100;
+const EXP_PER_COIN = 20;
+
 export function GameProvider({ children }) {
   const [playerPosition, setPlayerPosition] = useState({ x: 0, z: 0 });
   const [petPosition, setPetPosition] = useState({ x: 0.6, z: 0.6 });
@@ -30,7 +33,9 @@ export function GameProvider({ children }) {
   const [collectedCoinIds, setCollectedCoinIds] = useState([]);
   const [profile, setProfile] = useState(null);
   const [identity, setIdentityState] = useState(loadIdentity);
+  const [petStats, setPetStats] = useState({ level: 1, exp: 0 });
   const coinsSyncedRef = useRef(0);
+  const expAwardedForCoinsRef = useRef(0);
 
   const setIdentity = useCallback((type, value) => {
     const next = value ? { type, value: value.trim() } : null;
@@ -40,9 +45,30 @@ export function GameProvider({ children }) {
     coinsSyncedRef.current = 0;
   }, []);
 
+  const addPetExp = useCallback((amount) => {
+    setPetStats((prev) => {
+      let newExp = prev.exp + amount;
+      let newLevel = prev.level;
+      while (newExp >= EXP_PER_LEVEL) {
+        newExp -= EXP_PER_LEVEL;
+        newLevel += 1;
+      }
+      return { level: newLevel, exp: newExp };
+    });
+  }, []);
+
   const collectCoin = useCallback((id) => {
     setCollectedCoinIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
   }, []);
+
+  // Award EXP when pet collects coins (20 EXP per coin)
+  useEffect(() => {
+    const count = collectedCoinIds.length;
+    if (count <= expAwardedForCoinsRef.current) return;
+    const delta = count - expAwardedForCoinsRef.current;
+    expAwardedForCoinsRef.current = count;
+    addPetExp(delta * EXP_PER_COIN);
+  }, [collectedCoinIds.length, addPetExp]);
 
   // Sync new coins to Supabase when collectedCoinIds grows
   useEffect(() => {
@@ -72,6 +98,8 @@ export function GameProvider({ children }) {
     // Total coins: persisted + collected this session
     coinCountTotal: (profile?.coin_count ?? 0) + collectedCoinIds.length,
     unlockedPets: profile?.unlocked_pets ?? [],
+    petStats,
+    addPetExp,
   };
 
   return (
